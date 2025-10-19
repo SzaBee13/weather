@@ -1,19 +1,50 @@
-const input = document.getElementById("cityInput")
+const input = document.getElementById("cityInput");
+const OPENCAGE_API_KEY = "d4b2a8cb57dd40f1b92c6fcbc129b3d7";
 
-// Helper function to fetch weather by coordinates
+// Fetch city and country from coordinates using OpenCage
+async function reverseGeocode(lat, lon) {
+  try {
+    const res = await fetch(
+      `https://api.opencagedata.com/geocode/v1/json?q=${lat}+${lon}&key=${OPENCAGE_API_KEY}&no_annotations=1&limit=1`
+    );
+    const data = await res.json();
+
+    if (!data.results || data.results.length === 0) {
+      return { city: "Unknown city", country: "Unknown country" };
+    }
+
+    const components = data.results[0].components;
+    const city =
+      components.city ||
+      components.town ||
+      components.village ||
+      "Unknown city";
+    const country = components.country || "Unknown country";
+
+    return { city, country };
+  } catch (err) {
+    console.error("Reverse geocoding error:", err);
+    return { city: "Unknown city", country: "Unknown country" };
+  }
+}
+
+// Example usage with your weather function
 async function fetchWeatherByCoords(lat, lon) {
   const resultDiv = document.getElementById("result");
-
   resultDiv.innerHTML = `<p class="text-gray-500 animate-pulse">Loading your local weather...</p>`;
 
   try {
+    // 1️⃣ Fetch weather
     const weatherRes = await fetch(
-      `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,weather_code,wind_speed_10m`
+      `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true`
     );
     const weatherData = await weatherRes.json();
-    const current = weatherData.current;
+    const current = weatherData.current_weather;
 
-    // Weather emoji mapping
+    // 2️⃣ Reverse geocode
+    const { city, country } = await reverseGeocode(lat, lon);
+
+    // 3️⃣ Weather emojis
     const weatherMap = {
       0: "☀️ Clear sky",
       1: "🌤️ Mainly clear",
@@ -27,10 +58,9 @@ async function fetchWeatherByCoords(lat, lon) {
       80: "🌦️ Showers",
       95: "⛈️ Thunderstorm",
     };
+    const weatherDesc = weatherMap[current.weathercode] || "🌈 Unknown weather";
 
-    const weatherDesc = weatherMap[current.weather_code] || "🌈 Unknown weather";
-
-    // Update background gradient based on weather
+    // 4️⃣ Background gradient
     const bgWeatherMap = {
       0: "from-yellow-400 to-orange-500",
       1: "from-yellow-300 to-blue-400",
@@ -44,20 +74,21 @@ async function fetchWeatherByCoords(lat, lon) {
       80: "from-blue-400 to-gray-500",
       95: "from-gray-700 to-gray-900",
     };
-    const gradientClass = bgWeatherMap[current.weather_code] || "from-sky-400 to-blue-600";
+    const gradientClass =
+      bgWeatherMap[current.weathercode] || "from-sky-400 to-blue-600";
     document.body.className = `min-h-screen flex justify-center items-center bg-gradient-to-br ${gradientClass}`;
 
-    // Display
+    // 5️⃣ Show result
     resultDiv.innerHTML = `
       <div class="space-y-1">
         <p class="text-2xl font-semibold">${weatherDesc}</p>
-        <p class="text-lg text-gray-700">Latitude: ${lat.toFixed(2)}, Longitude: ${lon.toFixed(2)}</p>
-        <p class="text-gray-800">🌡️ ${current.temperature_2m}°C</p>
-        <p class="text-gray-800">💨 ${current.wind_speed_10m} km/h wind</p>
+        <p class="text-lg text-gray-700">📍 ${city}, ${country}</p>
+        <p class="text-gray-800">🌡️ ${current.temperature}°C</p>
+        <p class="text-gray-800">💨 ${current.windspeed} km/h wind</p>
       </div>
     `;
-  } catch (error) {
-    console.error(error);
+  } catch (err) {
+    console.error(err);
     resultDiv.innerHTML = `<p class="text-red-500">Error fetching weather.</p>`;
   }
 }
@@ -67,11 +98,17 @@ async function Fetch() {
   const city = input.value.trim();
   if (!city) return;
 
-  const geoRes = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(city)}&count=1`);
+  const geoRes = await fetch(
+    `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(
+      city
+    )}&count=1`
+  );
   const geoData = await geoRes.json();
 
   if (!geoData.results || geoData.results.length === 0) {
-    document.getElementById("result").innerHTML = `<p class="text-red-500">City not found.</p>`;
+    document.getElementById(
+      "result"
+    ).innerHTML = `<p class="text-red-500">City not found.</p>`;
     return;
   }
 
@@ -87,14 +124,17 @@ window.addEventListener("load", () => {
         await fetchWeatherByCoords(latitude, longitude);
       },
       (error) => {
-        console.warn("Geolocation failed, user must enter city manually.", error);
+        console.warn(
+          "Geolocation failed, user must enter city manually.",
+          error
+        );
       }
     );
   }
 });
 
-input.addEventListener("keydown", function(event) {
+input.addEventListener("keydown", function (event) {
   if (event.key === "Enter") {
-    Fetch()
+    Fetch();
   }
-})
+});
